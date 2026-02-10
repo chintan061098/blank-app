@@ -3,7 +3,6 @@ import openai
 import json
 import pandas as pd
 import matplotlib.pyplot as plt
-from fpdf import FPDF
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(
@@ -22,7 +21,7 @@ st.markdown("""
 <hr>
 """, unsafe_allow_html=True)
 
-# ---------------- API KEY ----------------
+# ---------------- OPENAI CONFIG ----------------
 openai.api_key = st.secrets["OPENAI_API_KEY"]
 
 # ---------------- SIDEBAR ----------------
@@ -39,10 +38,10 @@ mutation = st.sidebar.text_input(
 )
 
 # ---------------- AI FUNCTIONS ----------------
-def gene_ai(gene):
+def get_gene_info(gene):
     prompt = f"""
-    Provide concise academic data about human gene {gene}.
-    Return ONLY valid JSON with fields:
+    Give concise academic information about the human gene {gene}.
+    Return ONLY valid JSON with keys:
     gene_name, gene_type, function,
     protein_length_aa, molecular_weight_kDa,
     pathways, disease_association
@@ -53,12 +52,14 @@ def gene_ai(gene):
         messages=[{"role": "user", "content": prompt}],
         temperature=0.2
     )
-    return json.loads(response.choices[0].message.content)
 
-def mutation_ai(gene, mutation):
+    return json.loads(response["choices"][0]["message"]["content"])
+
+
+def explain_mutation(gene, mutation):
     prompt = f"""
-    Explain the biological and clinical impact of mutation {mutation}
-    in gene {gene}. Keep it simple and academic.
+    Explain the biological impact of mutation {mutation} in gene {gene}.
+    Keep it short, simple, and academic.
     """
 
     response = openai.ChatCompletion.create(
@@ -66,46 +67,47 @@ def mutation_ai(gene, mutation):
         messages=[{"role": "user", "content": prompt}],
         temperature=0.2
     )
-    return response.choices[0].message.content
 
-# ---------------- ANALYZE ----------------
+    return response["choices"][0]["message"]["content"]
+
+# ---------------- MAIN ACTION ----------------
 if st.button("🔬 Analyze"):
     results = {}
 
-    with st.spinner("Analyzing genomic intelligence..."):
+    with st.spinner("Analyzing gene intelligence..."):
         for gene in genes:
-            results[gene] = gene_ai(gene)
+            results[gene] = get_gene_info(gene)
 
-    # ---------------- DISPLAY PER GENE ----------------
+    # ---------------- PER-GENE DISPLAY ----------------
     for gene, data in results.items():
         st.markdown(f"## 🧬 {gene}")
 
         col1, col2 = st.columns([2, 1])
 
         with col1:
-            st.table({
-                "Category": list(data.keys()),
-                "Details": list(data.values())
-            })
+            st.table(
+                pd.DataFrame(
+                    {"Category": data.keys(), "Details": data.values()}
+                )
+            )
 
         with col2:
             st.image(
                 f"https://string-db.org/api/image/network?identifiers={gene}&species=9606",
-                caption="Protein Interaction Network",
+                caption="Protein Interaction Network (STRING)",
                 use_container_width=True
             )
 
             st.image(
-                f"https://www.genome.jp/pathway/hsa",
-                caption="Biological Pathway (KEGG)",
+                f"https://www.genecards.org/Images/Pathways/{gene}.png",
+                caption="Associated Biological Pathway",
                 use_container_width=True
             )
 
-        # ---------------- MUTATION ANALYSIS ----------------
+        # ---------------- MUTATION ----------------
         if mutation:
             st.markdown("### 🧬 Mutation Impact")
-            explanation = mutation_ai(gene, mutation)
-            st.info(explanation)
+            st.info(explain_mutation(gene, mutation))
 
         st.markdown("---")
 
@@ -123,10 +125,10 @@ if st.button("🔬 Analyze"):
 
         st.dataframe(df)
 
-        fig = plt.figure()
-        df.plot(kind="bar")
-        plt.title("Protein Comparison")
-        plt.ylabel("Value")
+        fig, ax = plt.subplots()
+        df.plot(kind="bar", ax=ax)
+        ax.set_ylabel("Value")
+        ax.set_title("Protein Property Comparison")
         st.pyplot(fig)
 
 # ---------------- FOOTER ----------------
@@ -134,7 +136,6 @@ st.markdown("""
 <hr>
 <p style='text-align:center; font-size:14px; color:gray;'>
 ShubhgeneAI © 2026<br>
-Artificial Intelligence in Life Sciences<br>
-College Science Fair Project
+AI in Life Sciences | Academic Project
 </p>
 """, unsafe_allow_html=True)
