@@ -2,8 +2,7 @@ import streamlit as st
 import json
 import pandas as pd
 import matplotlib.pyplot as plt
-from openai import OpenAI
-from openai import RateLimitError
+import google.generativeai as genai
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(
@@ -22,8 +21,9 @@ st.markdown("""
 <hr>
 """, unsafe_allow_html=True)
 
-# ---------------- OPENAI CLIENT ----------------
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+# ---------------- GEMINI CONFIG ----------------
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+model = genai.GenerativeModel("gemini-1.5-flash")
 
 # ---------------- OFFLINE FALLBACK DATA ----------------
 OFFLINE_DATA = {
@@ -43,7 +43,7 @@ OFFLINE_DATA = {
         "protein_length_aa": 1863,
         "molecular_weight_kDa": 220,
         "pathways": "Homologous recombination",
-        "disease_association": "Breast, ovarian cancer"
+        "disease_association": "Breast and ovarian cancer"
     }
 }
 
@@ -70,34 +70,28 @@ def get_gene_info(gene):
     prompt = f"""
     Provide concise academic information about the human gene {gene}.
     Respond ONLY in valid JSON with keys:
-    gene_name, gene_type, function,
-    protein_length_aa, molecular_weight_kDa,
-    pathways, disease_association
+    gene_name,
+    gene_type,
+    function,
+    protein_length_aa,
+    molecular_weight_kDa,
+    pathways,
+    disease_association
     """
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.2
-    )
-
-    return json.loads(response.choices[0].message.content)
+    response = model.generate_content(prompt)
+    return json.loads(response.text)
 
 
 @st.cache_data(show_spinner=False)
 def explain_mutation(gene, mutation):
     prompt = f"""
-    Explain the biological impact of mutation {mutation}
+    Explain the biological and clinical impact of mutation {mutation}
     in gene {gene}. Keep it simple and academic.
     """
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.2
-    )
-
-    return response.choices[0].message.content
+    response = model.generate_content(prompt)
+    return response.text
 
 # ---------------- MAIN ACTION ----------------
 if st.button("🔬 Analyze Gene(s)"):
@@ -116,13 +110,10 @@ if st.button("🔬 Analyze Gene(s)"):
                 else:
                     results[gene] = get_gene_info(gene)
 
-            except RateLimitError:
-                st.warning(
-                    f"⚠️ API limit reached. Showing offline data for {gene}."
-                )
+            except Exception:
+                st.warning(f"⚠️ Gemini unavailable. Using offline data for {gene}.")
                 results[gene] = OFFLINE_DATA.get(
-                    gene,
-                    {"error": "No offline data available"}
+                    gene, {"error": "No offline data available"}
                 )
 
     # ---------------- DISPLAY ----------------
@@ -141,7 +132,7 @@ if st.button("🔬 Analyze Gene(s)"):
         with col2:
             st.image(
                 f"https://string-db.org/api/image/network?identifiers={gene}&species=9606",
-                caption="Protein Interaction Network",
+                caption="Protein Interaction Network (STRING DB)",
                 use_container_width=True
             )
 
@@ -149,8 +140,8 @@ if st.button("🔬 Analyze Gene(s)"):
             st.markdown("### 🧬 Mutation Impact")
             try:
                 st.info(explain_mutation(gene, mutation))
-            except RateLimitError:
-                st.info("Mutation analysis unavailable in offline mode.")
+            except Exception:
+                st.info("Mutation explanation unavailable in offline mode.")
 
         st.markdown("---")
 
