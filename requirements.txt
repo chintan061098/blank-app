@@ -2,3 +2,5 @@ streamlit
 openai>=1.0.0
 pandas
 matplotlib
+google-generativeai
+
