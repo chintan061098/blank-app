@@ -3,6 +3,7 @@ import json
 import pandas as pd
 import matplotlib.pyplot as plt
 from openai import OpenAI
+from openai import RateLimitError
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(
@@ -24,6 +25,28 @@ st.markdown("""
 # ---------------- OPENAI CLIENT ----------------
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
+# ---------------- OFFLINE FALLBACK DATA ----------------
+OFFLINE_DATA = {
+    "TP53": {
+        "gene_name": "TP53",
+        "gene_type": "Tumor Suppressor",
+        "function": "Regulates cell cycle and apoptosis",
+        "protein_length_aa": 393,
+        "molecular_weight_kDa": 53,
+        "pathways": "Cell cycle, DNA repair",
+        "disease_association": "Multiple cancers"
+    },
+    "BRCA1": {
+        "gene_name": "BRCA1",
+        "gene_type": "Tumor Suppressor",
+        "function": "DNA double strand break repair",
+        "protein_length_aa": 1863,
+        "molecular_weight_kDa": 220,
+        "pathways": "Homologous recombination",
+        "disease_association": "Breast, ovarian cancer"
+    }
+}
+
 # ---------------- SIDEBAR ----------------
 st.sidebar.header("⚙️ Controls")
 
@@ -37,18 +60,19 @@ mutation = st.sidebar.text_input(
     "Optional Mutation (e.g. p.R175H)"
 )
 
+offline_mode = st.sidebar.checkbox(
+    "Offline Demo Mode (Recommended for Fair)"
+)
+
 # ---------------- AI FUNCTIONS ----------------
+@st.cache_data(show_spinner=False)
 def get_gene_info(gene):
     prompt = f"""
     Provide concise academic information about the human gene {gene}.
     Respond ONLY in valid JSON with keys:
-    gene_name,
-    gene_type,
-    function,
-    protein_length_aa,
-    molecular_weight_kDa,
-    pathways,
-    disease_association
+    gene_name, gene_type, function,
+    protein_length_aa, molecular_weight_kDa,
+    pathways, disease_association
     """
 
     response = client.chat.completions.create(
@@ -60,10 +84,11 @@ def get_gene_info(gene):
     return json.loads(response.choices[0].message.content)
 
 
+@st.cache_data(show_spinner=False)
 def explain_mutation(gene, mutation):
     prompt = f"""
-    Explain the biological and clinical impact of mutation {mutation}
-    in gene {gene}. Keep it short, clear, and academic.
+    Explain the biological impact of mutation {mutation}
+    in gene {gene}. Keep it simple and academic.
     """
 
     response = client.chat.completions.create(
@@ -85,9 +110,22 @@ if st.button("🔬 Analyze Gene(s)"):
 
     with st.spinner("Analyzing gene intelligence..."):
         for gene in genes:
-            results[gene] = get_gene_info(gene)
+            try:
+                if offline_mode and gene in OFFLINE_DATA:
+                    results[gene] = OFFLINE_DATA[gene]
+                else:
+                    results[gene] = get_gene_info(gene)
 
-    # ---------------- DISPLAY PER GENE ----------------
+            except RateLimitError:
+                st.warning(
+                    f"⚠️ API limit reached. Showing offline data for {gene}."
+                )
+                results[gene] = OFFLINE_DATA.get(
+                    gene,
+                    {"error": "No offline data available"}
+                )
+
+    # ---------------- DISPLAY ----------------
     for gene, data in results.items():
         st.markdown(f"## 🧬 {gene}")
 
@@ -95,39 +133,35 @@ if st.button("🔬 Analyze Gene(s)"):
 
         with col1:
             df_info = pd.DataFrame({
-                "Category": list(data.keys()),
-                "Details": list(data.values())
+                "Category": data.keys(),
+                "Details": data.values()
             })
             st.table(df_info)
 
         with col2:
             st.image(
                 f"https://string-db.org/api/image/network?identifiers={gene}&species=9606",
-                caption="Protein Interaction Network (STRING DB)",
+                caption="Protein Interaction Network",
                 use_container_width=True
             )
 
-            st.image(
-                f"https://alphafold.ebi.ac.uk/files/AF-{gene}-F1-model_v4.png",
-                caption="Predicted Protein Structure (AlphaFold)",
-                use_container_width=True
-            )
-
-        # ---------------- MUTATION ANALYSIS ----------------
         if mutation:
             st.markdown("### 🧬 Mutation Impact")
-            st.info(explain_mutation(gene, mutation))
+            try:
+                st.info(explain_mutation(gene, mutation))
+            except RateLimitError:
+                st.info("Mutation analysis unavailable in offline mode.")
 
         st.markdown("---")
 
-    # ---------------- COMPARISON CHART ----------------
+    # ---------------- COMPARISON ----------------
     if len(results) > 1:
         st.markdown("## 📊 Multi-Gene Comparison")
 
         compare_df = pd.DataFrame({
             gene: {
-                "Protein Length (aa)": results[gene]["protein_length_aa"],
-                "Molecular Weight (kDa)": results[gene]["molecular_weight_kDa"]
+                "Protein Length (aa)": results[gene].get("protein_length_aa"),
+                "Molecular Weight (kDa)": results[gene].get("molecular_weight_kDa")
             }
             for gene in results
         }).T
@@ -145,7 +179,6 @@ st.markdown("""
 <hr>
 <p style="text-align:center; font-size:14px; color:gray;">
 ShubhgeneAI © 2026<br>
-Artificial Intelligence in Life Sciences<br>
-College Science Fair Project
+AI in Life Sciences | College Science Fair Project
 </p>
 """, unsafe_allow_html=True)
