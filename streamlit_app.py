@@ -2,12 +2,6 @@ import streamlit as st
 
 st.title("ShubhgeneAI")
 
-GENE_DATABASE = {
-    "BRCA1": {"description": "Breast cancer gene", "chromosome": 17},
-    "TP53": {"description": "Tumor suppressor gene", "chromosome": 17},
-    "EGFR": {"description": "Growth factor receptor", "chromosome": 7},
-}
-
 gene = st.selectbox("Select Gene", list(GENE_DATABASE.keys()))
 
 st.json(GENE_DATABASE[gene])
