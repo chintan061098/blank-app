@@ -19,7 +19,7 @@ st.markdown("""
 <hr>
 """, unsafe_allow_html=True)
 
-# ---------------- SIDEBAR MODE CONTROL ----------------
+# ---------------- MODE SELECTION ----------------
 st.sidebar.header("⚙ System Mode")
 
 mode = st.sidebar.radio(
@@ -27,12 +27,7 @@ mode = st.sidebar.radio(
     ["Offline Mode (Recommended)", "Online Mode (Experimental)"]
 )
 
-if mode.startswith("Offline"):
-    st.sidebar.success("Offline mode uses local scientific knowledge")
-else:
-    st.sidebar.warning("Online mode requires internet & AI service")
-
-# ---------------- OFFLINE DATABASE ----------------
+# ---------------- LOCAL DATABASE ----------------
 GENE_DB = {
     "TP53": {
         "Gene Type": "Tumor Suppressor",
@@ -60,21 +55,21 @@ GENE_DB = {
     }
 }
 
-# ---------------- AI LOGIC ----------------
-def offline_ai(gene, mutation=None):
+# ---------------- AI FUNCTIONS ----------------
+def offline_ai_reasoning(gene, mutation=None):
     steps = [
-        f"Loaded curated gene profile for {gene}",
-        "Analyzed protein attributes",
-        "Mapped pathway involvement",
-        "Associated disease relevance"
+        f"Loaded curated gene data for {gene}",
+        "Analyzed protein structure",
+        "Mapped biological pathway",
+        "Linked to disease relevance"
     ]
     if mutation:
-        steps.append(f"Simulated impact of mutation {mutation}")
+        steps.append(f"Simulated mutation effect: {mutation}")
     return steps
 
-def online_ai_stub(gene):
-    # Placeholder for future API integration
-    raise RuntimeError("Online AI service not configured")
+def online_ai_enhancement_stub(gene):
+    # Placeholder – NO exception raised
+    return "Online AI enhancement unavailable (demo mode)"
 
 # ---------------- SIDEBAR CONTROLS ----------------
 st.sidebar.header("🔬 Analysis Controls")
@@ -127,7 +122,7 @@ if run:
             ax2.set_title("Protein Mass")
             st.pyplot(fig2)
 
-        # -------- PATHWAY --------
+        # -------- PATHWAY DIAGRAM --------
         fig3, ax3 = plt.subplots(figsize=(6, 2))
         ax3.text(0.1, 0.5, gene, fontsize=12, weight="bold")
         ax3.arrow(0.3, 0.5, 0.3, 0, head_width=0.05)
@@ -138,26 +133,30 @@ if run:
         # -------- MUTATION --------
         if mutation:
             fig4, ax4 = plt.subplots()
-            ax4.bar(
-                ["Normal Protein", "Mutated Protein"],
-                [100, 60]
-            )
+            ax4.bar(["Normal Protein", "Mutated Protein"], [100, 60])
             ax4.set_ylabel("Functional Efficiency (%)")
-            ax4.set_title(f"Simulated Mutation Impact: {mutation}")
+            ax4.set_title(f"Mutation Impact: {mutation}")
             st.pyplot(fig4)
 
         # -------- AI REASONING --------
         with st.expander("🧠 AI Reasoning"):
-            if mode.startswith("Offline"):
-                for step in offline_ai(gene, mutation):
-                    st.markdown(f"- {step}")
-            else:
-                try:
-                    online_ai_stub(gene)
-                except Exception as e:
-                    st.error("Online AI unavailable — switched to Offline Mode")
-                    for step in offline_ai(gene, mutation):
-                        st.markdown(f"- {step}")
+            for step in offline_ai_reasoning(gene, mutation):
+                st.markdown(f"- {step}")
+
+            if mode.startswith("Online"):
+                st.caption("🔍 Online enhancement attempted")
+                st.caption(online_ai_enhancement_stub(gene))
+
+        # -------- REFERENCES (ALWAYS VISIBLE) --------
+        st.markdown("### 📚 External Scientific References")
+        st.link_button(
+            "NCBI Gene",
+            f"https://www.ncbi.nlm.nih.gov/gene/?term={gene}"
+        )
+        st.link_button(
+            "UniProt",
+            f"https://www.uniprot.org/uniprotkb?query={gene}"
+        )
 
         st.markdown("---")
 
@@ -166,6 +165,6 @@ st.markdown("""
 <hr>
 <p style="text-align:center;color:gray;font-size:14px">
 ShubhgeneAI © 2026<br>
-Hybrid Offline/Online AI Architecture Demonstration
+Resilient Hybrid AI Architecture for Academic Demonstration
 </p>
 """, unsafe_allow_html=True)
