@@ -10,45 +10,68 @@ st.set_page_config(
     layout="wide"
 )
 
-# ---------------- TITLE ----------------
+# ---------------- OFFLINE MODE FLAG ----------------
+OFFLINE_MODE = True  # 🔒 Hard enforced for science fair reliability
+
+# ---------------- HEADER ----------------
 st.markdown("""
-<h1 style='text-align:center'>🧬 ShubhgeneAI</h1>
-<h3 style='text-align:center;color:gray'>AI-Inspired Gene Visualization Platform</h3>
-<hr>
+<div style="text-align:center">
+    <h1>🧬 ShubhgeneAI</h1>
+    <h3 style="color:gray">Hybrid Gene Intelligence Platform</h3>
+</div>
 """, unsafe_allow_html=True)
 
-# ---------------- LOCAL DATABASE ----------------
+if OFFLINE_MODE:
+    st.success("🟢 Offline Mode Active — No Internet or API Required")
+else:
+    st.info("🌐 Online Mode Active")
+
+st.markdown("---")
+
+# ---------------- LOCAL OFFLINE DATABASE ----------------
 GENE_DB = {
     "TP53": {
-        "type": "Tumor Suppressor",
-        "function": "Cell cycle arrest & apoptosis",
-        "protein_length": 393,
-        "molecular_weight": 53,
-        "pathway": "Cell cycle checkpoint",
-        "disease": "Multiple cancers"
+        "Gene Type": "Tumor Suppressor",
+        "Function": "Cell cycle arrest and apoptosis",
+        "Protein Length (aa)": 393,
+        "Molecular Weight (kDa)": 53,
+        "Pathway": "DNA damage checkpoint",
+        "Disease": "Multiple cancers"
     },
     "BRCA1": {
-        "type": "Tumor Suppressor",
-        "function": "DNA repair",
-        "protein_length": 1863,
-        "molecular_weight": 220,
-        "pathway": "Homologous recombination",
-        "disease": "Breast & ovarian cancer"
+        "Gene Type": "Tumor Suppressor",
+        "Function": "DNA double strand break repair",
+        "Protein Length (aa)": 1863,
+        "Molecular Weight (kDa)": 220,
+        "Pathway": "Homologous recombination",
+        "Disease": "Breast & ovarian cancer"
     },
     "EGFR": {
-        "type": "Oncogene",
-        "function": "Growth signaling",
-        "protein_length": 1210,
-        "molecular_weight": 134,
-        "pathway": "MAPK / PI3K",
-        "disease": "Lung cancer"
+        "Gene Type": "Oncogene",
+        "Function": "Growth factor receptor signaling",
+        "Protein Length (aa)": 1210,
+        "Molecular Weight (kDa)": 134,
+        "Pathway": "MAPK / PI3K-AKT",
+        "Disease": "Lung cancer"
     }
 }
+
+# ---------------- OFFLINE AI SIMULATION ----------------
+def offline_ai_analysis(gene, mutation=None):
+    steps = [
+        f"Loaded offline genomic profile for {gene}",
+        "Analyzed protein structural attributes",
+        "Mapped biological pathway involvement",
+        "Estimated disease relevance using known biology"
+    ]
+    if mutation:
+        steps.append(f"Simulated functional impact of mutation {mutation}")
+    return steps
 
 # ---------------- SIDEBAR ----------------
 st.sidebar.header("⚙ Controls")
 
-genes = st.sidebar.multiselect(
+selected_genes = st.sidebar.multiselect(
     "Select Gene(s)",
     list(GENE_DB.keys()),
     default=["TP53"]
@@ -56,73 +79,96 @@ genes = st.sidebar.multiselect(
 
 mutation = st.sidebar.text_input("Mutation (optional)", "p.R175H")
 
-# ---------------- RUN ----------------
-if st.sidebar.button("🔬 Analyze Gene"):
+run = st.sidebar.button("🔬 Run Analysis")
 
-    with st.spinner("Analyzing genomic data..."):
-        time.sleep(1.5)
+# ---------------- MAIN ANALYSIS ----------------
+if run:
 
-    for gene in genes:
-        g = GENE_DB[gene]
+    with st.spinner("Running offline AI simulation..."):
+        time.sleep(1.2)
+
+    for gene in selected_genes:
+        data = GENE_DB[gene]
 
         st.markdown(f"## 🧬 {gene}")
 
-        # -------- INFO TABLE --------
+        # -------- DATA TABLE --------
         df = pd.DataFrame({
-            "Property": g.keys(),
-            "Description": g.values()
+            "Property": data.keys(),
+            "Description": data.values()
         })
         st.table(df)
 
-        # -------- PROTEIN LENGTH VISUAL --------
-        st.markdown("### 📏 Protein Length Visualization")
-
+        # -------- PROTEIN LENGTH --------
         fig1, ax1 = plt.subplots()
-        ax1.bar(["Protein Length"], [g["protein_length"]])
+        ax1.bar(["Protein Length"], [data["Protein Length (aa)"]])
         ax1.set_ylabel("Amino Acids")
         ax1.set_title("Protein Size")
         st.pyplot(fig1)
 
         # -------- MOLECULAR WEIGHT --------
-        st.markdown("### ⚖️ Molecular Weight")
-
         fig2, ax2 = plt.subplots()
-        ax2.bar(["Molecular Weight"], [g["molecular_weight"]])
+        ax2.bar(["Molecular Weight"], [data["Molecular Weight (kDa)"]])
         ax2.set_ylabel("kDa")
         ax2.set_title("Protein Mass")
         st.pyplot(fig2)
 
-        # -------- FUNCTIONAL PATHWAY DIAGRAM --------
-        st.markdown("### 🧠 Functional Pathway")
-
+        # -------- PATHWAY DIAGRAM --------
         fig3, ax3 = plt.subplots(figsize=(6, 2))
         ax3.text(0.1, 0.5, gene, fontsize=12, weight="bold")
         ax3.arrow(0.25, 0.5, 0.3, 0, head_width=0.05)
-        ax3.text(0.6, 0.5, g["pathway"], fontsize=11)
+        ax3.text(0.6, 0.5, data["Pathway"], fontsize=11)
         ax3.axis("off")
         st.pyplot(fig3)
 
         # -------- MUTATION EFFECT --------
-        st.markdown("### 🧪 Mutation Impact Simulation")
+        if mutation:
+            fig4, ax4 = plt.subplots()
+            ax4.bar(
+                ["Normal Protein", "Mutated Protein"],
+                [100, 60],
+            )
+            ax4.set_ylabel("Functional Efficiency (%)")
+            ax4.set_title(f"Simulated Effect of {mutation}")
+            st.pyplot(fig4)
 
-        fig4, ax4 = plt.subplots()
-        ax4.bar(["Normal Protein", "Mutated Protein"], [100, 60])
-        ax4.set_ylabel("Functional Efficiency (%)")
-        ax4.set_title(f"Effect of {mutation}")
-        st.pyplot(fig4)
+        # -------- AI REASONING --------
+        with st.expander("🧠 Offline AI Reasoning"):
+            for step in offline_ai_analysis(gene, mutation):
+                st.markdown(f"- {step}")
 
-        # -------- REFERENCES --------
-        st.markdown("### 📚 References")
+        # -------- REFERENCES (OPTIONAL INTERNET) --------
+        st.markdown("### 📚 External References (Optional)")
+        st.caption("Links open only if internet is available")
         st.link_button("NCBI Gene", f"https://www.ncbi.nlm.nih.gov/gene/?term={gene}")
         st.link_button("UniProt", f"https://www.uniprot.org/uniprotkb?query={gene}")
 
         st.markdown("---")
 
+    # -------- COMPARISON --------
+    if len(selected_genes) > 1:
+        st.markdown("## 📊 Gene Comparison")
+
+        comp = pd.DataFrame({
+            gene: {
+                "Protein Length": GENE_DB[gene]["Protein Length (aa)"],
+                "Molecular Weight": GENE_DB[gene]["Molecular Weight (kDa)"]
+            }
+            for gene in selected_genes
+        }).T
+
+        st.dataframe(comp)
+
+        fig, ax = plt.subplots()
+        comp.plot(kind="bar", ax=ax)
+        ax.set_title("Protein Property Comparison")
+        st.pyplot(fig)
+
 # ---------------- FOOTER ----------------
 st.markdown("""
 <hr>
-<p style='text-align:center;color:gray'>
-ShubhgeneAI – Offline AI Genomics Simulator<br>
-Designed for College Science Fair Demonstration
+<p style="text-align:center;color:gray;font-size:14px">
+ShubhgeneAI © 2026<br>
+Offline-First AI Genomics Demonstration System
 </p>
 """, unsafe_allow_html=True)
