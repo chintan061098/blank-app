@@ -10,74 +10,43 @@ st.set_page_config(
     layout="wide"
 )
 
-# ---------------- SESSION STATE ----------------
-if "poster_mode" not in st.session_state:
-    st.session_state.poster_mode = False
-
-# ---------------- HEADER ----------------
-title_size = "2.8rem" if st.session_state.poster_mode else "2.2rem"
-subtitle_size = "1.6rem" if st.session_state.poster_mode else "1.2rem"
-
-st.markdown(f"""
-<div style="text-align:center">
-    <h1 style="font-size:{title_size}">🧬 ShubhgeneAI</h1>
-    <h3 style="font-size:{subtitle_size}">AI-Inspired Gene Intelligence Platform</h3>
-    <p style="color:gray">Offline Scientific Demonstration System</p>
-</div>
+# ---------------- TITLE ----------------
+st.markdown("""
+<h1 style='text-align:center'>🧬 ShubhgeneAI</h1>
+<h3 style='text-align:center;color:gray'>AI-Inspired Gene Visualization Platform</h3>
 <hr>
 """, unsafe_allow_html=True)
 
-# ---------------- LOCAL GENE DATABASE ----------------
+# ---------------- LOCAL DATABASE ----------------
 GENE_DB = {
     "TP53": {
-        "gene_type": "Tumor Suppressor",
-        "function": "Controls cell cycle and induces apoptosis in response to DNA damage",
-        "protein_length_aa": 393,
-        "molecular_weight_kDa": 53,
-        "pathways": "Cell cycle regulation, DNA repair",
-        "disease_association": "Breast cancer, lung cancer, leukemia"
+        "type": "Tumor Suppressor",
+        "function": "Cell cycle arrest & apoptosis",
+        "protein_length": 393,
+        "molecular_weight": 53,
+        "pathway": "Cell cycle checkpoint",
+        "disease": "Multiple cancers"
     },
     "BRCA1": {
-        "gene_type": "Tumor Suppressor",
-        "function": "Repairs DNA double-strand breaks via homologous recombination",
-        "protein_length_aa": 1863,
-        "molecular_weight_kDa": 220,
-        "pathways": "DNA damage response",
-        "disease_association": "Breast and ovarian cancer"
+        "type": "Tumor Suppressor",
+        "function": "DNA repair",
+        "protein_length": 1863,
+        "molecular_weight": 220,
+        "pathway": "Homologous recombination",
+        "disease": "Breast & ovarian cancer"
     },
     "EGFR": {
-        "gene_type": "Proto-oncogene",
-        "function": "Regulates cell growth and proliferation via signal transduction",
-        "protein_length_aa": 1210,
-        "molecular_weight_kDa": 134,
-        "pathways": "MAPK, PI3K-AKT",
-        "disease_association": "Lung cancer, glioblastoma"
+        "type": "Oncogene",
+        "function": "Growth signaling",
+        "protein_length": 1210,
+        "molecular_weight": 134,
+        "pathway": "MAPK / PI3K",
+        "disease": "Lung cancer"
     }
 }
 
-# ---------------- CORE FUNCTIONS ----------------
-def get_gene_info(gene):
-    return GENE_DB.get(gene)
-
-def explain_mutation(gene, mutation):
-    return (
-        f"Mutation {mutation} in {gene} may alter amino-acid structure, "
-        f"impacting protein stability or signaling efficiency. "
-        f"Such mutations are frequently linked to pathological phenotypes "
-        f"and altered therapeutic response."
-    )
-
-def ai_reasoning_steps(gene):
-    return [
-        f"Identified {gene} as a known human gene",
-        "Analyzed gene classification and molecular role",
-        "Evaluated protein structure properties",
-        "Linked biological pathways to disease relevance",
-        "Generated mutation impact hypothesis"
-    ]
-
 # ---------------- SIDEBAR ----------------
-st.sidebar.header("⚙️ Controls")
+st.sidebar.header("⚙ Controls")
 
 genes = st.sidebar.multiselect(
     "Select Gene(s)",
@@ -85,94 +54,75 @@ genes = st.sidebar.multiselect(
     default=["TP53"]
 )
 
-mutation = st.sidebar.text_input("Optional Mutation (e.g. p.R175H)")
+mutation = st.sidebar.text_input("Mutation (optional)", "p.R175H")
 
-st.sidebar.checkbox(
-    "Poster / Presentation Mode",
-    value=st.session_state.poster_mode,
-    on_change=lambda: st.session_state.update(
-        {"poster_mode": not st.session_state.poster_mode}
-    )
-)
+# ---------------- RUN ----------------
+if st.sidebar.button("🔬 Analyze Gene"):
 
-# ---------------- ANALYSIS BUTTON ----------------
-if st.button("🔬 Run Analysis"):
-
-    if not genes:
-        st.warning("Please select at least one gene.")
-        st.stop()
-
-    # -------- FAKE AI THINKING --------
-    with st.spinner("AI model analyzing genomic data..."):
+    with st.spinner("Analyzing genomic data..."):
         time.sleep(1.5)
 
     for gene in genes:
-        data = get_gene_info(gene)
-
-        if not data:
-            st.error(f"No data available for {gene}")
-            continue
+        g = GENE_DB[gene]
 
         st.markdown(f"## 🧬 {gene}")
 
-        # -------- TABLE --------
+        # -------- INFO TABLE --------
         df = pd.DataFrame({
-            "Category": data.keys(),
-            "Details": data.values()
+            "Property": g.keys(),
+            "Description": g.values()
         })
         st.table(df)
 
-        # -------- MUTATION --------
-        if mutation:
-            st.markdown("### 🧬 Mutation Impact")
-            st.info(explain_mutation(gene, mutation))
+        # -------- PROTEIN LENGTH VISUAL --------
+        st.markdown("### 📏 Protein Length Visualization")
 
-        # -------- AI REASONING --------
-        with st.expander("🧠 AI Reasoning Steps"):
-            for step in ai_reasoning_steps(gene):
-                st.markdown(f"- {step}")
+        fig1, ax1 = plt.subplots()
+        ax1.bar(["Protein Length"], [g["protein_length"]])
+        ax1.set_ylabel("Amino Acids")
+        ax1.set_title("Protein Size")
+        st.pyplot(fig1)
 
-        # -------- CITATIONS --------
-        st.markdown("### 📚 Scientific References")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.link_button(
-                "🔗 NCBI Gene",
-                f"https://www.ncbi.nlm.nih.gov/gene/?term={gene}"
-            )
-        with col2:
-            st.link_button(
-                "🔗 UniProt",
-                f"https://www.uniprot.org/uniprotkb?query={gene}"
-            )
+        # -------- MOLECULAR WEIGHT --------
+        st.markdown("### ⚖️ Molecular Weight")
+
+        fig2, ax2 = plt.subplots()
+        ax2.bar(["Molecular Weight"], [g["molecular_weight"]])
+        ax2.set_ylabel("kDa")
+        ax2.set_title("Protein Mass")
+        st.pyplot(fig2)
+
+        # -------- FUNCTIONAL PATHWAY DIAGRAM --------
+        st.markdown("### 🧠 Functional Pathway")
+
+        fig3, ax3 = plt.subplots(figsize=(6, 2))
+        ax3.text(0.1, 0.5, gene, fontsize=12, weight="bold")
+        ax3.arrow(0.25, 0.5, 0.3, 0, head_width=0.05)
+        ax3.text(0.6, 0.5, g["pathway"], fontsize=11)
+        ax3.axis("off")
+        st.pyplot(fig3)
+
+        # -------- MUTATION EFFECT --------
+        st.markdown("### 🧪 Mutation Impact Simulation")
+
+        fig4, ax4 = plt.subplots()
+        ax4.bar(["Normal Protein", "Mutated Protein"], [100, 60])
+        ax4.set_ylabel("Functional Efficiency (%)")
+        ax4.set_title(f"Effect of {mutation}")
+        st.pyplot(fig4)
+
+        # -------- REFERENCES --------
+        st.markdown("### 📚 References")
+        st.link_button("NCBI Gene", f"https://www.ncbi.nlm.nih.gov/gene/?term={gene}")
+        st.link_button("UniProt", f"https://www.uniprot.org/uniprotkb?query={gene}")
 
         st.markdown("---")
-
-    # -------- COMPARISON --------
-    if len(genes) > 1:
-        st.markdown("## 📊 Comparative Analysis")
-
-        compare_df = pd.DataFrame({
-            gene: {
-                "Protein Length (aa)": GENE_DB[gene]["protein_length_aa"],
-                "Molecular Weight (kDa)": GENE_DB[gene]["molecular_weight_kDa"]
-            }
-            for gene in genes
-        }).T
-
-        st.dataframe(compare_df)
-
-        fig, ax = plt.subplots()
-        compare_df.plot(kind="bar", ax=ax)
-        ax.set_ylabel("Value")
-        ax.set_title("Protein Property Comparison")
-        st.pyplot(fig)
 
 # ---------------- FOOTER ----------------
 st.markdown("""
 <hr>
-<p style="text-align:center; font-size:14px; color:gray;">
-ShubhgeneAI © 2026<br>
-Offline AI Simulation for Academic Demonstration
+<p style='text-align:center;color:gray'>
+ShubhgeneAI – Offline AI Genomics Simulator<br>
+Designed for College Science Fair Demonstration
 </p>
 """, unsafe_allow_html=True)
