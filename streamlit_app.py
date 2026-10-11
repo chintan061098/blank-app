@@ -133,7 +133,7 @@ if run:
         # -------- MUTATION --------
         if mutation:
             fig4, ax4 = plt.subplots()
-            ax4.bar(["Normal Protein", "Mutated Protein"], [100, 60])
+            ax4.bar(["Normal Protein", "Mutated Protein"], [100, 70])
             ax4.set_ylabel("Functional Efficiency (%)")
             ax4.set_title(f"Mutation Impact: {mutation}")
             st.pyplot(fig4)
