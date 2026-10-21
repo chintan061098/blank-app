@@ -179,13 +179,19 @@ with tabs[2]:
                     fig = px.bar(sample_counts, x='Sample Type', y='Count', title=f'Sample Type Distribution in {project}')
                     st.plotly_chart(fig, use_container_width=True)
                 
-                # Convert the 'Source' URL column into interactive HTML anchor tags so it's clickable inside the table
-                df_display = df.copy()
-                if 'Source' in df_display.columns:
-                    df_display['Source'] = df_display['Source'].apply(lambda x: f'<a href="{x}" target="_blank">🔗 Open Link</a>')
-                
-                # Render using st.markdown with unsafe_allow_html to make links clickable in tables
-                st.markdown(df_display.to_html(escape=False, index=False), unsafe_allow_html=True)
+                # Render native interactive dataframe with clickable LinkColumn
+                st.dataframe(
+                    df,
+                    column_config={
+                        "Source": st.column_config.LinkColumn(
+                            "Source Link",
+                            help="Click to open file in GDC portal",
+                            display_text="🔗 Open File"
+                        )
+                    },
+                    use_container_width=True,
+                    hide_index=True
+                )
     else: 
         st.info('Online mode is required to check GDC. Offline mode does not invent expression measurements.')
     references(gene)
