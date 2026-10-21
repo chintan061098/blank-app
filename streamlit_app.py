@@ -149,43 +149,46 @@ def gdc_gene_exploration_url(project, symbol):
 
 # --- Inside Tab 2 ---
 with tabs[2]:
-    st.subheader(f'TCGA Gene Expression: {gene} in {project}')
+    st.subheader(f'TCGA gene expression: {gene} in {project}')
     st.write(f'Explore open-access GDC RNA-seq files and transcriptome profiling data for **{gene}** within the **{project}** cohort.')
     
-    # Direct GDC Portal Integration Button
-    st.markdown(f"### 🔗 Direct GDC Portal Link")
-    st.link_button(f"Explore {gene} expression in {project} on GDC Portal", gdc_gene_exploration_url(project, gene))
+    st.markdown('#### 🔗 Direct GDC Portal Integration')
+    st.link_button(f'Explore {gene} expression in {project} on GDC Portal', gdc_gene_exploration_url(project, gene))
     
     st.markdown('---')
     st.subheader('Project Transcriptome Files (STAR - Counts)')
-    st.info('This view retrieves open-access RNA-seq quantification files for the selected project. You can inspect sample types and file sizes.')
+    st.info('This version discovers STAR count files and visualizes sample type distributions for the selected project.')
     
-    if mode=='Online / live data':
-        if st.button(f'Check GDC expression files for {project}'):
+    if mode == 'Online / live data':
+        if st.button('Check GDC expression data availability'):
             try:
-                with st.spinner(f'Checking GDC for {project}…'): 
+                with st.spinner(f'Checking {project}…'): 
                     st.session_state[f'expr_{project}'] = gdc_catalog(project, 'Transcriptome Profiling')
             except Exception as e: 
                 st.error(f'GDC query failed: {e}')
                 
         df = st.session_state.get(f'expr_{project}')
         if isinstance(df, pd.DataFrame):
-            st.metric('RNA-Seq Files Available', len(df))
+            st.metric('Files returned', len(df))
             if df.empty: 
                 st.info('No matching files returned. Try another project.')
             else:
-                # Show sample type distribution if column exists
                 if 'Sample type' in df.columns:
                     sample_counts = df['Sample type'].value_counts().reset_index()
                     sample_counts.columns = ['Sample Type', 'Count']
                     fig = px.bar(sample_counts, x='Sample Type', y='Count', title=f'Sample Type Distribution in {project}')
                     st.plotly_chart(fig, use_container_width=True)
                 
-                st.dataframe(df.drop(columns=['Source']), use_container_width=True, hide_index=True)
-                st.dataframe(df[['File', 'Source']], use_container_width=True, hide_index=True)
+                # Convert the 'Source' URL column into interactive HTML anchor tags so it's clickable inside the table
+                df_display = df.copy()
+                if 'Source' in df_display.columns:
+                    df_display['Source'] = df_display['Source'].apply(lambda x: f'<a href="{x}" target="_blank">🔗 Open Link</a>')
+                
+                # Render using st.markdown with unsafe_allow_html to make links clickable in tables
+                st.markdown(df_display.to_html(escape=False, index=False), unsafe_allow_html=True)
     else: 
-        st.info('Online mode is required to check GDC live records. Switch to Online mode in the sidebar.')
-
+        st.info('Online mode is required to check GDC. Offline mode does not invent expression measurements.')
+    references(gene)
 # with tabs[2]:
 #     st.subheader('TCGA gene expression'); st.write('Discover open-access GDC RNA-seq files for the selected project.')
 #     st.info('This version discovers STAR count files; it does not yet download, aggregate and statistically compare gene-level expression measurements.')
