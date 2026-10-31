@@ -14,7 +14,7 @@ import plotly.express as px
 # --------------------------------------------------------------------------
 # App configuration
 # --------------------------------------------------------------------------
-st.set_page_config(page_title='ShubhgeneAI', page_icon='🧬', layout='wide')
+st.set_page_config(page_title='OncogeneAI', page_icon='🧬', layout='wide')
 
 TIMEOUT = int(os.getenv('APP_TIMEOUT', '25'))
 MAX_QUESTION_CHARS = 800
