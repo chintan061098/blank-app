@@ -53,7 +53,7 @@ def _build_session() -> requests.Session:
     adapter = HTTPAdapter(max_retries=retry)
     s.mount('https://', adapter)
     s.mount('http://', adapter)
-    s.headers.update({'User-Agent': 'ShubhgeneAI-educational-prototype/1.0'})
+    s.headers.update({'User-Agent': 'OncogeneAI-educational-prototype/1.0'})
     return s
 
 SESSION = _build_session()
@@ -315,7 +315,7 @@ def gdc_gene_exploration_url(project: str, symbol: str) -> str:
 # Header
 # --------------------------------------------------------------------------
 st.markdown(
-    '<h1 style="text-align:center">🧬 ShubhgeneAI</h1>'
+    '<h1 style="text-align:center">🧬 OncogeneAI</h1>'
     '<p style="text-align:center;color:gray">Hybrid Gene Intelligence Platform · Evidence first, AI assisted</p>',
     unsafe_allow_html=True,
 )
@@ -560,6 +560,6 @@ with tabs[5]:
 st.markdown('---')
 st.markdown(
     '<div style="text-align:center;color:gray;font-size:.85rem">'
-    'ShubhgeneAI · Evidence first, AI assisted · Not for diagnosis or treatment decisions</div>',
+    'OncogeneAI · Evidence first, AI assisted · Not for diagnosis or treatment decisions</div>',
     unsafe_allow_html=True,
 )
