@@ -14,7 +14,7 @@ import plotly.express as px
 # --------------------------------------------------------------------------
 # App configuration
 # --------------------------------------------------------------------------
-st.set_page_config(page_title='BioGeneAI', page_icon='🧬', layout='wide')
+st.set_page_config(page_title='Gene-SphereAI', page_icon='🧬', layout='wide')
 
 TIMEOUT = int(os.getenv('APP_TIMEOUT', '25'))
 MAX_QUESTION_CHARS = 800
@@ -53,7 +53,7 @@ def _build_session() -> requests.Session:
     adapter = HTTPAdapter(max_retries=retry)
     s.mount('https://', adapter)
     s.mount('http://', adapter)
-    s.headers.update({'User-Agent': 'BioGeneAI-educational-prototype/1.0'})
+    s.headers.update({'User-Agent': 'Gene-SphereAI-educational-prototype/1.0'})
     return s
 
 SESSION = _build_session()
@@ -315,7 +315,7 @@ def gdc_gene_exploration_url(project: str, symbol: str) -> str:
 # Header
 # --------------------------------------------------------------------------
 st.markdown(
-    '<h1 style="text-align:center">🧬 BioGeneAI</h1>'
+    '<h1 style="text-align:center">🧬 Gene-SphereAI</h1>'
     '<p style="text-align:center;color:gray">Hybrid Gene Intelligence Platform · Evidence first, AI assisted</p>',
     unsafe_allow_html=True,
 )
@@ -560,6 +560,6 @@ with tabs[5]:
 st.markdown('---')
 st.markdown(
     '<div style="text-align:center;color:gray;font-size:.85rem">'
-    'BioGeneAI · Evidence first, AI assisted · Not for diagnosis or treatment decisions</div>',
+    'Gene-SphereAI · Evidence first, AI assisted · Not for diagnosis or treatment decisions</div>',
     unsafe_allow_html=True,
 )
