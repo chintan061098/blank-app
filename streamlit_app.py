@@ -674,7 +674,7 @@ with tabs[3]:
 
 
 with tabs[4]:
-    safe_section(render_protein_structure_1, 'Protein structure tab')
+    safe_section(lambda: render_protein_structure_1(gene), 'Protein structure tab')
 
 
 # --------------------------------------------------------------------------
