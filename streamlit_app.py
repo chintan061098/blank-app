@@ -294,35 +294,49 @@ def render_landing_page():
     st.markdown("<p style='text-align: center; color: gray;'>A Hybrid Multi-Omics & Protein Structure Intelligence Platform</p>", unsafe_allow_html=True)
     st.markdown('---')
 
+    # Bordered stat cards that wrap text perfectly without clipping
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Curated Genes", len(GENE_DB))
-    c2.metric("Integrated APIs", "NCBI, UniProt, GDC, AlphaFold")
-    c3.metric("TCGA Cohorts", "7 Cancer Types")
-    c4.metric("Architecture", "Fault-Isolated Modular Tabs")
+    with c1:
+        with st.container(border=True):
+            st.markdown("**Curated Genes**")
+            st.markdown(f"### {len(GENE_DB)}")
+    with c2:
+        with st.container(border=True):
+            st.markdown("**Integrated APIs**")
+            st.markdown("NCBI, UniProt, GDC, AlphaFold")
+    with c3:
+        with st.container(border=True):
+            st.markdown("**TCGA Cohorts**")
+            st.markdown("7 Cancer Types")
+    with c4:
+        with st.container(border=True):
+            st.markdown("**Architecture**")
+            st.markdown("Fault-Isolated Tabs")
 
-    st.markdown("### 🔍 About the Platform")
+    st.markdown("### About the Platform")
     st.write(
         "**Gene-SphereAI** bridges genomic metadata, clinical variant classifications, transcriptomic profiling "
         "from the Genomic Data Commons (GDC), and 3D protein structural models into a single interface. "
         "Designed for evidence-first exploration with strict error boundaries."
     )
 
-    st.markdown("### 🚀 Core Modules")
+    st.markdown("### Core Modules")
     col_a, col_b, col_c = st.columns(3)
     with col_a:
-        st.markdown("#### 🧬 Overview & Protein Explorer")
-        st.write("Retrieve official NCBI/UniProt records alongside AlphaFold structural models, sequence metrics, and PAE confidence plots.")
+        with st.container(border=True):
+            st.markdown("#### Overview & Protein Explorer")
+            st.write("Retrieve official NCBI/UniProt records alongside AlphaFold structural models, sequence metrics, and PAE confidence plots.")
     with col_b:
-        st.markdown("#### 📊 Multi-Omics & Variants")
-        st.write("Explore ClinVar germline clinical significance tables and GDC TCGA open-access transcriptome/methylation file distributions.")
+        with st.container(border=True):
+            st.markdown("#### Multi-Omics & Variants")
+            st.write("Explore ClinVar germline clinical significance tables and GDC TCGA open-access transcriptome/methylation file distributions.")
     with col_c:
-        st.markdown("#### 🤖 AI Assistant")
-        st.write("Leverage a Gemini-powered teaching assistant configured to explain biological context strictly using verified records.")
+        with st.container(border=True):
+            st.markdown("#### AI Assistant")
+            st.write("Leverage a Gemini-powered teaching assistant configured to explain biological context strictly using verified records.")
 
     st.markdown('---')
     st.info("👉 Use the sidebar **Navigation** menu to switch to **Gene & Cancer Explorer** and begin analyzing specific genes.")
-
-
 # --------------------------------------------------------------------------
 # Tab Renderers
 # --------------------------------------------------------------------------
