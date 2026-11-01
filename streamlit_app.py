@@ -265,13 +265,20 @@ def references(gene: str):
 # --------------------------------------------------------------------------
 # UI Header & Sidebar Navigation
 # --------------------------------------------------------------------------
+# --------------------------------------------------------------------------
+# Unified Professional Header Banner
+# --------------------------------------------------------------------------
 st.markdown(
-    '<h1 style="text-align:center">🧬 Gene-SphereAI</h1>'
-    '<p style="text-align:center;color:gray">Hybrid Gene Intelligence Platform · Evidence first, AI assisted</p>',
+    """
+    <div style="text-align: center; padding: 10px 0px 10px 0px;">
+        <h1 style="margin-bottom: 0px;">🧬 Gene-SphereAI</h1>
+        <p style="color: gray; font-size: 1.1rem; margin-top: 5px;">Hybrid Gene Intelligence Platform &middot; Evidence first, AI assisted</p>
+        <p style="color: #888; font-size: 0.85rem; font-style: italic;">Student bioinformatics prototype &middot; Public data may change &middot; Not a diagnostic tool</p>
+    </div>
+    <hr style="margin-top: 10px; margin-bottom: 25px; border-color: #333;">
+    """,
     unsafe_allow_html=True,
 )
-st.caption('Student bioinformatics prototype · Public data may change · Not a diagnostic tool')
-
 with st.sidebar:
     st.header('🧭 Navigation')
     app_view = st.radio('Go to', ['🏠 Portal Home', '🧬 Gene & Cancer Explorer'])
