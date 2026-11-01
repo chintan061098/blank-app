@@ -22,6 +22,7 @@ MAX_QUESTION_CHARS = 800
 NCBI = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils'
 GDC = 'https://api.gdc.cancer.gov'
 UNIPROT = 'https://rest.uniprot.org'
+COSMIC = 'https://pmc.ncbi.nlm.nih.gov/articles/PMC10767972/'
 
 GENE_DB = {
  'TP53': {'full_name':'Tumor protein p53','type':'Tumor suppressor','function':'Regulates cell-cycle arrest, DNA-damage responses and apoptosis.','length':393,'mass':53,'pathway':'DNA damage response; cell-cycle checkpoints; apoptosis','disease':'Alterations are associated with several cancers; interpretation depends on variant and context.','chromosome':'17p13.1'},
