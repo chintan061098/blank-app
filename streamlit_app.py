@@ -196,13 +196,25 @@ def get_protein_structure(symbol: str) -> Optional[dict]:
         "alphafold_url": f"https://alphafold.ebi.ac.uk/entry/{accession}"
     }
 
+def gdc_gene_exploration_url(project: str, symbol: str) -> str:
+    filters = {
+        'op': 'and',
+        'content': [
+            {'op': 'in', 'content': {'field': 'cases.project.project_id', 'value': [project]}},
+            {'op': 'in', 'content': {'field': 'genes.symbol', 'value': [symbol]}},
+        ],
+    }
+    return 'https://portal.gdc.cancer.gov/exploration?filters=' + quote(json.dumps(filters))
 
-def render_protein_structure_1():
+
+def render_protein_structure_1(selected_gene: str):
     st.subheader("Protein Structure Explorer")
     st.write("Explore the protein sequence, structure and functional features of the selected gene.")
-    if st.button("Retrieve Protein Structure"):
+    
+    if st.button("Retrieve Protein Structure", key="btn_protein_struct"):
         with st.spinner("Retrieving protein information..."):
-            result = get_protein_structure(gene)
+            # Pass the selected gene explicitly
+            result = get_protein_structure(selected_gene)
             if result:
                 st.success(f"UniProt accession: {result['accession']}")
                 st.link_button("Open AlphaFold 3D Structure", result["alphafold_url"])
