@@ -166,6 +166,52 @@ def uniprot_gene(symbol: str) -> dict:
         'url': f'https://www.uniprot.org/uniprotkb/{accession}',
     }
 
+# --------------------------------------------------
+# PROTEIN STRUCTURE EXPLORER
+# --------------------------------------------------
+
+def get_uniprot_accession(symbol: str) -> Optional[str]:
+    url = "https://rest.uniprot.org/uniprotkb/search"
+    params = {
+        "query": f"(gene_exact:{symbol}) AND (organism_id:9606) AND (reviewed:true)",
+        "format": "json",
+        "size": 1
+    }
+    data = get_json(url, params)
+    results = data.get("results", [])
+    if not results:
+        return None
+    return results[0].get("primaryAccession")
+
+
+def get_protein_structure(symbol: str) -> Optional[dict]:
+    accession = get_uniprot_accession(symbol)
+    if not accession:
+        return None
+    structure_url = f"https://alphafold.ebi.ac.uk/files/AF-{accession}-F1-model_v4.pdb"
+    return {
+        "accession": accession,
+        "structure_url": structure_url,
+        "uniprot_url": f"https://www.uniprot.org/uniprotkb/{accession}",
+        "alphafold_url": f"https://alphafold.ebi.ac.uk/entry/{accession}"
+    }
+
+
+def render_protein_structure():
+    st.subheader("Protein Structure Explorer")
+    st.write("Explore the protein sequence, structure and functional features of the selected gene.")
+    if st.button("Retrieve Protein Structure"):
+        with st.spinner("Retrieving protein information..."):
+            result = get_protein_structure(gene)
+            if result:
+                st.success(f"UniProt accession: {result['accession']}")
+                st.link_button("Open AlphaFold 3D Structure", result["alphafold_url"])
+                st.link_button("Open UniProt Protein Record", result["uniprot_url"])
+                st.markdown("### Structure file")
+                st.link_button("Download / view PDB file", result["structure_url"])
+            else:
+                st.warning("No reviewed UniProt protein record found.")
+
 
 # --------------------------------------------------
 # PROTEIN STRUCTURE EXPLORER
@@ -435,7 +481,7 @@ with st.sidebar:
     st.caption('Online mode uses public NCBI, UniProt and GDC endpoints. Gemini explanations require GEMINI_API_KEY.')
 
 facts = GENE_DB[gene]
-tabs = st.tabs(['Overview', 'Mutations', 'Gene expression', 'DNA methylation', 'Treatments', 'AI explanation'])
+tabs = st.tabs(['Overview', 'Mutations', 'Gene expression', 'DNA methylation', 'Protein structure', 'Treatments', 'AI explanation'])
 
 
 # --------------------------------------------------------------------------
@@ -613,6 +659,10 @@ def render_methylation():
 
 with tabs[3]:
     safe_section(render_methylation, 'DNA methylation tab')
+
+
+with tabs[4]:
+    safe_section(render_protein_structure, 'Protein structure tab')
 
 
 # --------------------------------------------------------------------------
