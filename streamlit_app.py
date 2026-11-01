@@ -206,24 +206,92 @@ def gdc_gene_exploration_url(project: str, symbol: str) -> str:
     }
     return 'https://portal.gdc.cancer.gov/exploration?filters=' + quote(json.dumps(filters))
 
+# --------------------------------------------------
+# PROTEIN STRUCTURE EXPLORER (In-App Metadata & Visualization)
+# --------------------------------------------------
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_uniprot_accession(symbol: str) -> Optional[str]:
+    url = "https://rest.uniprot.org/uniprotkb/search"
+    params = {
+        "query": f"(gene_exact:{symbol}) AND (organism_id:9606) AND (reviewed:true)",
+        "format": "json",
+        "size": 1
+    }
+    data = get_json(url, params)
+    results = data.get("results", [])
+    if not results:
+        return None
+    return results[0].get("primaryAccession")
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_alphafold_metadata(accession: str) -> Optional[dict]:
+    url = f"https://alphafold.ebi.ac.uk/api/prediction/{accession}"
+    try:
+        data = get_json(url)
+        if isinstance(data, list) and len(data) > 0:
+            return data[0]
+        elif isinstance(data, dict):
+            return data
+    except Exception:
+        pass
+    return None
+
 
 def render_protein_structure_1(selected_gene: str):
     st.subheader("Protein Structure Explorer")
-    st.write("Explore the protein sequence, structure and functional features of the selected gene.")
-    
-    if st.button("Retrieve Protein Structure", key="btn_protein_struct"):
-        with st.spinner("Retrieving protein information..."):
-            # Pass the selected gene explicitly
-            result = get_protein_structure(selected_gene)
-            if result:
-                st.success(f"UniProt accession: {result['accession']}")
-                st.link_button("Open AlphaFold 3D Structure", result["alphafold_url"])
-                st.link_button("Open UniProt Protein Record", result["uniprot_url"])
-                st.markdown("### Structure file")
-                st.link_button("Download / view PDB file", result["structure_url"])
-            else:
-                st.warning("No reviewed UniProt protein record found.")
+    st.write("Explore structural metadata, confidence metrics, and alignment graphics retrieved directly from AlphaFold and UniProt.")
 
+    if st.button("Retrieve Protein Structure", key="btn_protein_struct"):
+        with st.spinner("Fetching structural metadata and metrics..."):
+            accession = get_uniprot_accession(selected_gene)
+            if not accession:
+                st.warning("No reviewed UniProt protein record found for this gene.")
+                return
+
+            uni_data = uniprot_gene(selected_gene)
+            af_data = get_alphafold_metadata(accession)
+
+            st.success(f"**UniProt Accession:** {accession}")
+
+            # Metrics display
+            col1, col2, col3 = st.columns(3)
+            pname = uni_data.get('protein_name', 'N/A')
+            if len(pname) > 25:
+                pname = pname[:22] + '...'
+            col1.metric("Protein Name", pname)
+            col2.metric("Sequence Length", f"{uni_data.get('length', 'N/A')} aa")
+            
+            if af_data:
+                col3.metric("AlphaFold Version", af_data.get('alphafoldVersion', 'N/A'))
+            else:
+                col3.metric("AlphaFold Model", "Available")
+
+            st.markdown("---")
+            st.markdown("### 🧬 Structural Features & Confidence")
+
+            if af_data:
+                st.write(f"**Organism:** {af_data.get('organismScientificName', 'Homo sapiens')} (TaxID: {af_data.get('taxId', '9606')})")
+                st.write(f"**Gene Symbol:** {af_data.get('gene', selected_gene)}")
+                
+                # Render the PAE image directly on the interface
+                pae_url = af_data.get('paeImageUrl')
+                if pae_url:
+                    st.markdown("#### Predicted Aligned Error (PAE) Plot")
+                    st.image(pae_url, caption="AlphaFold PAE graph indicating domain packing confidence.", use_container_width=True)
+                
+                bc = af_data.get('globalMetricValue')
+                if bc:
+                    st.metric("Mean pLDDT Confidence Score", f"{float(bc) * 100:.1f}%")
+            else:
+                st.info("Detailed structural metrics are loading via external records.")
+
+            # Optional external links housed inside an expander
+            with st.expander("External Database Files & Links"):
+                st.link_button("Open AlphaFold 3D Structure Entry", f"https://alphafold.ebi.ac.uk/entry/{accession}")
+                st.link_button("Open UniProt Protein Record", f"https://www.uniprot.org/uniprotkb/{accession}")
+                st.link_button("Download PDB Model File", f"https://alphafold.ebi.ac.uk/files/AF-{accession}-F1-model_v4.pdb")
 
 # --------------------------------------------------
 # PROTEIN STRUCTURE EXPLORER
