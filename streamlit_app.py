@@ -197,7 +197,7 @@ def get_protein_structure(symbol: str) -> Optional[dict]:
     }
 
 
-def render_protein_structure():
+def render_protein_structure_1():
     st.subheader("Protein Structure Explorer")
     st.write("Explore the protein sequence, structure and functional features of the selected gene.")
     if st.button("Retrieve Protein Structure"):
@@ -662,7 +662,7 @@ with tabs[3]:
 
 
 with tabs[4]:
-    safe_section(render_protein_structure, 'Protein structure tab')
+    safe_section(render_protein_structure_1, 'Protein structure tab')
 
 
 # --------------------------------------------------------------------------
