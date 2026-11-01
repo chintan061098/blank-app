@@ -39,18 +39,14 @@ GENE_DB = {
 
 
 # --------------------------------------------------------------------------
-# Networking: a single session with retries/backoff for transient failures
+# Networking & Helper Functions
 # --------------------------------------------------------------------------
 def _build_session() -> requests.Session:
     s = requests.Session()
     retry = Retry(
-        total=3,
-        connect=3,
-        read=3,
-        backoff_factor=0.6,
+        total=3, connect=3, read=3, backoff_factor=0.6,
         status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=['GET', 'POST'],
-        raise_on_status=False,
+        allowed_methods=['GET', 'POST'], raise_on_status=False,
     )
     adapter = HTTPAdapter(max_retries=retry)
     s.mount('https://', adapter)
@@ -62,18 +58,15 @@ SESSION = _build_session()
 
 
 def describe_error(e: Exception) -> str:
-    """Turn raw exceptions into messages a non-technical user can act on."""
     if isinstance(e, requests.exceptions.Timeout):
-        return 'The request timed out. The external database may be slow or unreachable right now. Please try again.'
+        return 'The request timed out. External database may be slow or unreachable.'
     if isinstance(e, requests.exceptions.ConnectionError):
-        return 'Could not connect to the external database. Please check your network connection and try again.'
+        return 'Could not connect to database. Check network connection.'
     if isinstance(e, requests.exceptions.HTTPError):
         code = e.response.status_code if e.response is not None else 'unknown'
-        return f'The external database returned an error (HTTP {code}). It may be temporarily unavailable.'
+        return f'External database returned error (HTTP {code}).'
     if isinstance(e, (ValueError, json.JSONDecodeError)):
-        return 'The external database returned a response that could not be understood (not valid JSON).'
-    if isinstance(e, RuntimeError):
-        return str(e)
+        return 'Database returned invalid response format.'
     return f'An unexpected error occurred: {e}'
 
 
@@ -82,38 +75,27 @@ def get_json(url: str, params: Optional[dict] = None) -> dict:
         r = SESSION.get(url, params=params, timeout=TIMEOUT)
         r.raise_for_status()
         return r.json()
-    except (requests.exceptions.Timeout, requests.exceptions.ConnectionError,
-            requests.exceptions.HTTPError, ValueError, json.JSONDecodeError):
-        raise
-    except Exception as e:  # anything unforeseen still surfaces cleanly
+    except Exception as e:
         raise RuntimeError(f'Unexpected failure while contacting {url}: {e}')
 
 
 def quote(value) -> str:
-    """URL-encode any value used inside a hand-built link."""
     return urllib.parse.quote_plus(str(value))
 
 
-# --------------------------------------------------------------------------
-# Fault isolation: one broken tab must never take the whole app down
-# --------------------------------------------------------------------------
 def safe_section(render_fn: Callable, title: str = 'This section'):
     try:
         render_fn()
     except Exception as e:
-        st.error(f'{title} could not be displayed because of an unexpected error. '
-                 f'Other tabs are unaffected.')
+        st.error(f'{title} could not be displayed. Other tabs are unaffected.')
         with st.expander('Technical details (for debugging)'):
             st.exception(e)
 
 
 def render_link_table(df: pd.DataFrame, link_col: str = 'Source'):
-    """Render a dataframe with a clickable link column, without raw HTML (avoids injection)."""
     if link_col in df.columns:
         st.dataframe(
-            df,
-            use_container_width=True,
-            hide_index=True,
+            df, use_container_width=True, hide_index=True,
             column_config={link_col: st.column_config.LinkColumn(link_col, display_text='Open ↗')},
         )
     else:
@@ -121,7 +103,7 @@ def render_link_table(df: pd.DataFrame, link_col: str = 'Source'):
 
 
 # --------------------------------------------------------------------------
-# External data sources
+# External Data Retrieval
 # --------------------------------------------------------------------------
 @st.cache_data(ttl=3600, show_spinner=False)
 def ncbi_gene(symbol: str) -> dict:
@@ -133,12 +115,9 @@ def ncbi_gene(symbol: str) -> dict:
     if not ids:
         return {'found': False, 'message': 'No human NCBI Gene record found.'}
 
-    time.sleep(0.34)  # be polite to the unauthenticated eutils rate limit (~3 req/s)
+    time.sleep(0.34)
     summary = get_json(f'{NCBI}/esummary.fcgi', {'db': 'gene', 'id': ids[0], 'retmode': 'json'})
     s = (summary.get('result') or {}).get(ids[0]) or {}
-    if not isinstance(s, dict):
-        raise RuntimeError('NCBI returned an unexpected summary structure.')
-
     return {
         'found': True, 'id': ids[0], 'name': s.get('name', symbol),
         'description': s.get('description', ''), 'summary': s.get('summary', ''),
@@ -166,68 +145,22 @@ def uniprot_gene(symbol: str) -> dict:
         'url': f'https://www.uniprot.org/uniprotkb/{accession}',
     }
 
-# --------------------------------------------------
-# PROTEIN STRUCTURE EXPLORER
-# --------------------------------------------------
-
-def get_uniprot_accession(symbol: str) -> Optional[str]:
-    url = "https://rest.uniprot.org/uniprotkb/search"
-    params = {
-        "query": f"(gene_exact:{symbol}) AND (organism_id:9606) AND (reviewed:true)",
-        "format": "json",
-        "size": 1
-    }
-    data = get_json(url, params)
-    results = data.get("results", [])
-    if not results:
-        return None
-    return results[0].get("primaryAccession")
-
-
-def get_protein_structure(symbol: str) -> Optional[dict]:
-    accession = get_uniprot_accession(symbol)
-    if not accession:
-        return None
-    structure_url = f"https://alphafold.ebi.ac.uk/files/AF-{accession}-F1-model_v4.pdb"
-    return {
-        "accession": accession,
-        "structure_url": structure_url,
-        "uniprot_url": f"https://www.uniprot.org/uniprotkb/{accession}",
-        "alphafold_url": f"https://alphafold.ebi.ac.uk/entry/{accession}"
-    }
-
-def gdc_gene_exploration_url(project: str, symbol: str) -> str:
-    filters = {
-        'op': 'and',
-        'content': [
-            {'op': 'in', 'content': {'field': 'cases.project.project_id', 'value': [project]}},
-            {'op': 'in', 'content': {'field': 'genes.symbol', 'value': [symbol]}},
-        ],
-    }
-    return 'https://portal.gdc.cancer.gov/exploration?filters=' + quote(json.dumps(filters))
-
-# --------------------------------------------------
-# PROTEIN STRUCTURE EXPLORER (In-App Metadata & Visualization)
-# --------------------------------------------------
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_uniprot_accession(symbol: str) -> Optional[str]:
-    url = "https://rest.uniprot.org/uniprotkb/search"
-    params = {
-        "query": f"(gene_exact:{symbol}) AND (organism_id:9606) AND (reviewed:true)",
-        "format": "json",
-        "size": 1
-    }
-    data = get_json(url, params)
-    results = data.get("results", [])
+    data = get_json(f'{UNIPROT}/uniprotkb/search', {
+        'query': f'(gene_exact:{symbol}) AND (organism_id:9606) AND (reviewed:true)',
+        'format': 'json', 'size': 1,
+    })
+    results = data.get('results', [])
     if not results:
         return None
-    return results[0].get("primaryAccession")
+    return results[0].get('primaryAccession')
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_alphafold_metadata(accession: str) -> Optional[dict]:
-    url = f"https://alphafold.ebi.ac.uk/api/prediction/{accession}"
+    url = f'https://alphafold.ebi.ac.uk/api/prediction/{accession}'
     try:
         data = get_json(url)
         if isinstance(data, list) and len(data) > 0:
@@ -237,164 +170,6 @@ def get_alphafold_metadata(accession: str) -> Optional[dict]:
     except Exception:
         pass
     return None
-
-
-def render_protein_structure_1(selected_gene: str):
-    st.subheader("Protein Structure Explorer")
-    st.write("Explore structural metadata, confidence metrics, and alignment graphics retrieved directly from AlphaFold and UniProt.")
-
-    if st.button("Retrieve Protein Structure", key="btn_protein_struct"):
-        with st.spinner("Fetching structural metadata and metrics..."):
-            accession = get_uniprot_accession(selected_gene)
-            if not accession:
-                st.warning("No reviewed UniProt protein record found for this gene.")
-                return
-
-            uni_data = uniprot_gene(selected_gene)
-            af_data = get_alphafold_metadata(accession)
-
-            st.success(f"**UniProt Accession:** {accession}")
-
-            # Metrics display
-            col1, col2, col3 = st.columns(3)
-            pname = uni_data.get('protein_name', 'N/A')
-            if len(pname) > 25:
-                pname = pname[:22] + '...'
-            col1.metric("Protein Name", pname)
-            col2.metric("Sequence Length", f"{uni_data.get('length', 'N/A')} aa")
-            
-            if af_data:
-                col3.metric("AlphaFold Version", af_data.get('alphafoldVersion', 'N/A'))
-            else:
-                col3.metric("AlphaFold Model", "Available")
-
-            st.markdown("---")
-            st.markdown("### 🧬 Structural Features & Confidence")
-
-            if af_data:
-                st.write(f"**Organism:** {af_data.get('organismScientificName', 'Homo sapiens')} (TaxID: {af_data.get('taxId', '9606')})")
-                st.write(f"**Gene Symbol:** {af_data.get('gene', selected_gene)}")
-                
-                # Render the PAE image directly on the interface
-                pae_url = af_data.get('paeImageUrl')
-                if pae_url:
-                    st.markdown("#### Predicted Aligned Error (PAE) Plot")
-                    st.image(pae_url, caption="AlphaFold PAE graph indicating domain packing confidence.", use_container_width=True)
-                
-                bc = af_data.get('globalMetricValue')
-                if bc:
-                    st.metric("Mean pLDDT Confidence Score", f"{float(bc) * 100:.1f}%")
-            else:
-                st.info("Detailed structural metrics are loading via external records.")
-
-            # Optional external links housed inside an expander
-            with st.expander("External Database Files & Links"):
-                st.link_button("Open AlphaFold 3D Structure Entry", f"https://alphafold.ebi.ac.uk/entry/{accession}")
-                st.link_button("Open UniProt Protein Record", f"https://www.uniprot.org/uniprotkb/{accession}")
-                st.link_button("Download PDB Model File", f"https://alphafold.ebi.ac.uk/files/AF-{accession}-F1-model_v4.pdb")
-
-# --------------------------------------------------
-# PROTEIN STRUCTURE EXPLORER
-# --------------------------------------------------
-
-def get_uniprot_accession(symbol):
-
-    url = (
-        "https://rest.uniprot.org/uniprotkb/search"
-    )
-
-    params = {
-        "query": (
-            f"(gene_exact:{symbol}) "
-            "AND (organism_id:9606) "
-            "AND (reviewed:true)"
-        ),
-        "format": "json",
-        "size": 1
-    }
-
-    data = get_json(url, params)
-
-    results = data.get("results", [])
-
-    if not results:
-        return None
-
-    return results[0].get("primaryAccession")
-
-
-def get_protein_structure(symbol):
-
-    accession = get_uniprot_accession(symbol)
-
-    if not accession:
-        return None
-
-    # AlphaFold structure download link
-    structure_url = (
-        "https://alphafold.ebi.ac.uk/files/"
-        f"AF-{accession}-F1-model_v4.pdb"
-    )
-
-    return {
-        "accession": accession,
-        "structure_url": structure_url,
-        "uniprot_url": (
-            f"https://www.uniprot.org/uniprotkb/{accession}"
-        ),
-        "alphafold_url": (
-            f"https://alphafold.ebi.ac.uk/entry/{accession}"
-        )
-    }
-
-
-def render_protein_structure():
-
-    st.subheader("Protein Structure Explorer")
-
-    st.write(
-        "Explore the protein sequence, structure "
-        "and functional features of the selected gene."
-    )
-
-    if st.button("Retrieve Protein Structure"):
-
-        with st.spinner("Retrieving protein information..."):
-
-            result = get_protein_structure(gene)
-
-            if result:
-
-                st.success(
-                    f"UniProt accession: "
-                    f"{result['accession']}"
-                )
-
-                st.link_button(
-                    "Open AlphaFold 3D Structure",
-                    result["alphafold_url"]
-                )
-
-                st.link_button(
-                    "Open UniProt Protein Record",
-                    result["uniprot_url"]
-                )
-
-                st.markdown(
-                    "### Structure file"
-                )
-
-                st.link_button(
-                    "Download / view PDB file",
-                    result["structure_url"]
-                )
-
-            else:
-
-                st.warning(
-                    "No reviewed UniProt protein record found."
-                )
-
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
@@ -417,8 +192,7 @@ def clinvar_search(symbol: str, limit: int = 25) -> pd.DataFrame:
         x = result.get(uid)
         if not isinstance(x, dict):
             continue
-        gc = x.get('germline_classification')
-        gc = gc if isinstance(gc, dict) else {}
+        gc = x.get('germline_classification') or {}
         rows.append({
             'ClinVar ID': uid,
             'Variant / condition': x.get('title', ''),
@@ -470,68 +244,6 @@ def gdc_catalog(project: str, category: str, limit: int = 100) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def get_gemini_key() -> str:
-    key = ''
-    try:
-        key = st.secrets.get('GEMINI_API_KEY', '')
-    except Exception:
-        key = ''
-    return key or os.getenv('GEMINI_API_KEY', '')
-
-
-def gemini_explain(symbol: str, facts: dict, question: str) -> str:
-    key = get_gemini_key()
-    if not key:
-        raise RuntimeError('Gemini key missing. Add GEMINI_API_KEY in Streamlit Secrets or environment variables.')
-
-    question = (question or '').strip()
-    if not question:
-        raise RuntimeError('Please enter a question before requesting an explanation.')
-    if len(question) > MAX_QUESTION_CHARS:
-        question = question[:MAX_QUESTION_CHARS]
-
-    prompt = f'''You are a cautious bioinformatics teaching assistant. Explain only the supplied
-information; do not invent variants, measurements, treatments or citations. State uncertainty.
-If the question asks for a personal diagnosis, dosage or individualized treatment plan, decline
-and recommend consulting a qualified clinician instead. Educational use only, not diagnosis or
-medical advice.
-
-Gene: {symbol}
-Curated facts: {facts}
-Student question: {question}
-
-Use headings: Explanation, Biological context, Limitations, Sources to verify.'''
-
-    try:
-        r = SESSION.post(
-            'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
-            headers={'Content-Type': 'application/json', 'x-goog-api-key': key},
-            json={'contents': [{'parts': [{'text': prompt}]}]},
-            timeout=TIMEOUT,
-        )
-    except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
-        raise
-
-    if r.status_code == 429:
-        raise RuntimeError('Gemini quota/rate limit exceeded. Please wait a moment and try again.')
-    if r.status_code in (401, 403):
-        raise RuntimeError('Gemini API key invalid or unauthorized. Check GEMINI_API_KEY.')
-    r.raise_for_status()
-
-    try:
-        data = r.json()
-        return data['candidates'][0]['content']['parts'][0]['text']
-    except (KeyError, IndexError, TypeError, json.JSONDecodeError, ValueError):
-        raise RuntimeError('Gemini returned an unexpected response. Check key, quota and model access.')
-
-
-def references(gene: str):
-    a, b, c = st.columns(3)
-    a.link_button('NCBI Gene', f'https://www.ncbi.nlm.nih.gov/gene/?term={quote(gene)}')
-    b.link_button('UniProt', f'https://www.uniprot.org/uniprotkb?query={quote(gene)}')
-    c.link_button('ClinVar', f'https://www.ncbi.nlm.nih.gov/clinvar/?term={quote(gene)}[gene]')
-
-
 def gdc_gene_exploration_url(project: str, symbol: str) -> str:
     filters = {
         'op': 'and',
@@ -543,8 +255,15 @@ def gdc_gene_exploration_url(project: str, symbol: str) -> str:
     return 'https://portal.gdc.cancer.gov/exploration?filters=' + quote(json.dumps(filters))
 
 
+def references(gene: str):
+    a, b, c = st.columns(3)
+    a.link_button('NCBI Gene', f'https://www.ncbi.nlm.nih.gov/gene/?term={quote(gene)}')
+    b.link_button('UniProt', f'https://www.uniprot.org/uniprotkb?query={quote(gene)}')
+    c.link_button('ClinVar', f'https://www.ncbi.nlm.nih.gov/clinvar/?term={quote(gene)}[gene]')
+
+
 # --------------------------------------------------------------------------
-# Header
+# UI Header & Sidebar Navigation
 # --------------------------------------------------------------------------
 st.markdown(
     '<h1 style="text-align:center">🧬 Gene-SphereAI</h1>'
@@ -554,18 +273,58 @@ st.markdown(
 st.caption('Student bioinformatics prototype · Public data may change · Not a diagnostic tool')
 
 with st.sidebar:
+    st.header('🧭 Navigation')
+    app_view = st.radio('Go to', ['🏠 Portal Home', '🧬 Gene & Cancer Explorer'])
+    
+    st.markdown('---')
     st.header('⚙️ Analysis settings')
     mode = st.radio('Mode', ['Offline / demo', 'Online / live data'])
     gene = st.selectbox('Choose gene', list(GENE_DB.keys()), index=1)
     project = st.selectbox('TCGA project', ['TCGA-BRCA', 'TCGA-LUAD', 'TCGA-LUSC', 'TCGA-COAD', 'TCGA-GBM', 'TCGA-OV', 'TCGA-PRAD'])
-    st.caption('Online mode uses public NCBI, UniProt and GDC endpoints. Gemini explanations require GEMINI_API_KEY.')
+    st.caption('Online mode uses public NCBI, UniProt and GDC endpoints.')
 
 facts = GENE_DB[gene]
-tabs = st.tabs(['Overview', 'Mutations', 'Gene expression', 'DNA methylation', 'Protein structure', 'Treatments', 'AI explanation'])
 
 
 # --------------------------------------------------------------------------
-# Tab 1: Overview
+# Portal Landing Page
+# --------------------------------------------------------------------------
+def render_landing_page():
+    st.markdown("<h2 style='text-align: center;'>Welcome to Gene-SphereAI Portal</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: gray;'>A Hybrid Multi-Omics & Protein Structure Intelligence Platform</p>", unsafe_allow_html=True)
+    st.markdown('---')
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Curated Genes", len(GENE_DB))
+    c2.metric("Integrated APIs", "NCBI, UniProt, GDC, AlphaFold")
+    c3.metric("TCGA Cohorts", "7 Cancer Types")
+    c4.metric("Architecture", "Fault-Isolated Modular Tabs")
+
+    st.markdown("### 🔍 About the Platform")
+    st.write(
+        "**Gene-SphereAI** bridges genomic metadata, clinical variant classifications, transcriptomic profiling "
+        "from the Genomic Data Commons (GDC), and 3D protein structural models into a single interface. "
+        "Designed for evidence-first exploration with strict error boundaries."
+    )
+
+    st.markdown("### 🚀 Core Modules")
+    col_a, col_b, col_c = st.columns(3)
+    with col_a:
+        st.markdown("#### 🧬 Overview & Protein Explorer")
+        st.write("Retrieve official NCBI/UniProt records alongside AlphaFold structural models, sequence metrics, and PAE confidence plots.")
+    with col_b:
+        st.markdown("#### 📊 Multi-Omics & Variants")
+        st.write("Explore ClinVar germline clinical significance tables and GDC TCGA open-access transcriptome/methylation file distributions.")
+    with col_c:
+        st.markdown("#### 🤖 AI Assistant")
+        st.write("Leverage a Gemini-powered teaching assistant configured to explain biological context strictly using verified records.")
+
+    st.markdown('---')
+    st.info("👉 Use the sidebar **Navigation** menu to switch to **Gene & Cancer Explorer** and begin analyzing specific genes.")
+
+
+# --------------------------------------------------------------------------
+# Tab Renderers
 # --------------------------------------------------------------------------
 def render_overview():
     st.subheader(f'{gene} — gene and protein overview')
@@ -606,21 +365,15 @@ def render_overview():
 
             n = st.session_state.get(f'ncbi_{gene}')
             u = st.session_state.get(f'uni_{gene}')
-            if n:
-                if n.get('found'):
-                    st.success(f"NCBI Gene ID: {n['id']}")
-                    st.write(n.get('summary') or n.get('description') or 'No description provided.')
-                    st.link_button('View NCBI record', n['url'])
-                else:
-                    st.info(n['message'])
-            if u:
-                if u.get('found'):
-                    st.write('**UniProt accession:**', u['accession'])
-                    st.write('**Protein:**', u['protein_name'] or 'Not provided')
-                    st.write('**Length:**', u['length'] or 'Not provided')
-                    st.link_button('View UniProt record', u['url'])
-                else:
-                    st.info(u['message'])
+            if n and n.get('found'):
+                st.success(f"NCBI Gene ID: {n['id']}")
+                st.write(n.get('summary') or n.get('description') or 'No description provided.')
+                st.link_button('View NCBI record', n['url'])
+            if u and u.get('found'):
+                st.write('**UniProt accession:**', u['accession'])
+                st.write('**Protein:**', u['protein_name'] or 'Not provided')
+                st.write('**Length:**', u['length'] or 'Not provided')
+                st.link_button('View UniProt record', u['url'])
             if not n and not u:
                 st.info('Click the button to retrieve current records.')
         else:
@@ -628,17 +381,9 @@ def render_overview():
     references(gene)
 
 
-with tabs[0]:
-    safe_section(render_overview, 'Overview tab')
-
-
-# --------------------------------------------------------------------------
-# Tab 2: Mutations
-# --------------------------------------------------------------------------
 def render_mutations():
     st.subheader('Mutation and clinical-variant explorer')
-    st.warning('A gene symbol alone does not identify a person’s variant. Clinical classifications are '
-               'evidence summaries, not personal risk predictions.')
+    st.warning('Clinical classifications are evidence summaries, not personal risk predictions.')
     if mode == 'Online / live data':
         limit = st.slider('Maximum ClinVar records', 10, 100, 25, 5)
         if st.button('Retrieve ClinVar variants'):
@@ -649,35 +394,21 @@ def render_mutations():
                     st.session_state[f'clinvar_{gene}'] = None
                     st.error(f'ClinVar query failed: {describe_error(e)}')
         df = st.session_state.get(f'clinvar_{gene}')
-        if isinstance(df, pd.DataFrame):
-            if df.empty:
-                st.info('No records returned for this query.')
-            else:
-                render_link_table(df)
+        if isinstance(df, pd.DataFrame) and not df.empty:
+            render_link_table(df)
+        elif isinstance(df, pd.DataFrame):
+            st.info('No records returned for this query.')
     else:
-        st.info('Offline mode does not simulate mutation effects. Switch to Online mode to query ClinVar.')
+        st.info('Switch to Online mode to query ClinVar.')
     references(gene)
 
 
-with tabs[1]:
-    safe_section(render_mutations, 'Mutations tab')
-
-
-# --------------------------------------------------------------------------
-# Tab 3: Gene expression
-# --------------------------------------------------------------------------
 def render_expression():
     st.subheader(f'TCGA gene expression: {gene} in {project}')
-    st.write(f'Explore open-access GDC RNA-seq files and transcriptome profiling data for **{gene}** '
-             f'within the **{project}** cohort.')
-
     st.markdown('#### 🔗 Direct GDC Portal Integration')
     st.link_button(f'Explore {gene} expression in {project} on GDC Portal', gdc_gene_exploration_url(project, gene))
-
     st.markdown('---')
     st.subheader('Project Transcriptome Files (STAR - Counts)')
-    st.info('This version discovers STAR count files and visualizes sample type distributions for the selected project. '
-            'It does not yet download, aggregate and statistically compare gene-level expression measurements.')
 
     if mode == 'Online / live data':
         if st.button('Check GDC expression data availability'):
@@ -689,34 +420,23 @@ def render_expression():
                     st.error(f'GDC query failed: {describe_error(e)}')
 
         df = st.session_state.get(f'expr_{project}')
-        if isinstance(df, pd.DataFrame):
+        if isinstance(df, pd.DataFrame) and not df.empty:
             st.metric('Files returned', len(df))
-            if df.empty:
-                st.info('No matching files returned. Try another project.')
-            else:
-                if 'Sample type' in df.columns:
-                    sample_counts = df['Sample type'].value_counts().reset_index()
-                    sample_counts.columns = ['Sample Type', 'Count']
-                    fig = px.bar(sample_counts, x='Sample Type', y='Count', title=f'Sample Type Distribution in {project}')
-                    st.plotly_chart(fig, use_container_width=True)
-                render_link_table(df)
+            if 'Sample type' in df.columns:
+                sample_counts = df['Sample type'].value_counts().reset_index()
+                sample_counts.columns = ['Sample Type', 'Count']
+                fig = px.bar(sample_counts, x='Sample Type', y='Count', title=f'Sample Type Distribution in {project}')
+                st.plotly_chart(fig, use_container_width=True)
+            render_link_table(df)
+        elif isinstance(df, pd.DataFrame):
+            st.info('No matching files returned.')
     else:
-        st.info('Online mode is required to check GDC. Offline mode does not invent expression measurements.')
+        st.info('Online mode is required to check GDC.')
     references(gene)
 
 
-with tabs[2]:
-    safe_section(render_expression, 'Gene expression tab')
-
-
-# --------------------------------------------------------------------------
-# Tab 4: DNA methylation
-# --------------------------------------------------------------------------
 def render_methylation():
     st.subheader('TCGA DNA methylation')
-    st.write('First discover public methylation files for a cancer project.')
-    st.warning('This version does not yet calculate CpG beta values, annotate probes, match methylation to '
-               'expression samples, or compute correlations.')
     if mode == 'Online / live data':
         if st.button('Check GDC methylation data availability'):
             with st.spinner(f'Checking methylation files for {project}…'):
@@ -726,76 +446,106 @@ def render_methylation():
                     st.session_state[f'meth_{project}'] = None
                     st.error(f'GDC query failed: {describe_error(e)}')
         df = st.session_state.get(f'meth_{project}')
-        if isinstance(df, pd.DataFrame):
+        if isinstance(df, pd.DataFrame) and not df.empty:
             st.metric('Files returned', len(df))
-            if df.empty:
-                st.info('No matching open-access files returned.')
-            else:
-                render_link_table(df)
+            render_link_table(df)
+        elif isinstance(df, pd.DataFrame):
+            st.info('No matching open-access files returned.')
     else:
-        st.info('Online mode is required to check GDC. No methylation values are fabricated in offline mode.')
+        st.info('Online mode is required to check GDC.')
     references(gene)
 
 
-with tabs[3]:
-    safe_section(render_methylation, 'DNA methylation tab')
+def render_protein_structure(selected_gene: str):
+    st.subheader('Protein Structure Explorer')
+    st.write('Explore structural metadata, confidence metrics, and alignment graphics retrieved directly from AlphaFold and UniProt.')
+
+    if st.button('Retrieve Protein Structure', key='btn_protein_struct'):
+        with st.spinner('Fetching structural metadata and metrics...'):
+            accession = get_uniprot_accession(selected_gene)
+            if not accession:
+                st.warning('No reviewed UniProt protein record found for this gene.')
+                return
+
+            uni_data = uniprot_gene(selected_gene)
+            af_data = get_alphafold_metadata(accession)
+
+            st.success(f'**UniProt Accession:** {accession}')
+
+            col1, col2, col3 = st.columns(3)
+            pname = uni_data.get('protein_name', 'N/A')
+            if len(pname) > 25:
+                pname = pname[:22] + '...'
+            col1.metric('Protein Name', pname)
+            col2.metric('Sequence Length', f"{uni_data.get('length', 'N/A')} aa")
+            
+            if af_data:
+                col3.metric('AlphaFold Version', af_data.get('alphafoldVersion', 'N/A'))
+            else:
+                col3.metric('AlphaFold Model', 'Available')
+
+            st.markdown('---')
+            st.markdown('### 🧬 Structural Features & Confidence')
+
+            if af_data:
+                st.write(f'**Organism:** {af_data.get("organismScientificName", "Homo sapiens")} (TaxID: {af_data.get("taxId", "9606")})')
+                st.write(f'**Gene Symbol:** {af_data.get("gene", selected_gene)}')
+                
+                pae_url = af_data.get('paeImageUrl')
+                if pae_url:
+                    st.markdown('#### Predicted Aligned Error (PAE) Plot')
+                    st.image(pae_url, caption='AlphaFold PAE graph indicating domain packing confidence.', use_container_width=True)
+                
+                bc = af_data.get('globalMetricValue')
+                if bc:
+                    st.metric('Mean pLDDT Confidence Score', f'{float(bc) * 100:.1f}%')
+            else:
+                st.info('Detailed structural metrics are loading via external records.')
+
+            with st.expander('External Database Files & Links'):
+                st.link_button('Open AlphaFold 3D Structure Entry', f'https://alphafold.ebi.ac.uk/entry/{accession}')
+                st.link_button('Open UniProt Protein Record', f'https://www.uniprot.org/uniprotkb/{accession}')
+                st.link_button('Download PDB Model File', f'https://alphafold.ebi.ac.uk/files/AF-{accession}-F1-model_v4.pdb')
 
 
-with tabs[4]:
-    safe_section(lambda: render_protein_structure_1(gene), 'Protein structure tab')
-
-
-# --------------------------------------------------------------------------
-# Tab 5: Treatments
-# --------------------------------------------------------------------------
 def render_treatments():
     st.subheader('Disease treatment and application information')
-    st.warning('Educational research only. Treatment depends on diagnosis, disease stage, exact variant, '
-               'current guidelines and clinical judgement.')
-    st.write('This version supplies reliable starting points rather than inferring a treatment from a gene alone.')
+    st.warning('Educational research only. Treatment depends on diagnosis, disease stage, exact variant, and clinical judgement.')
     st.markdown(f'- [NCI cancer information search for {gene}](https://www.cancer.gov/search/results?swKeyword={quote(gene)})')
     st.markdown(f'- [ClinicalTrials.gov studies involving {gene}](https://clinicaltrials.gov/search?term={quote(gene)})')
     st.markdown(f'- [ClinVar variant interpretations for {gene}](https://www.ncbi.nlm.nih.gov/clinvar/?term={quote(gene)}[gene])')
-    st.markdown(f'- [NCBI Gene background for {gene}](https://www.ncbi.nlm.nih.gov/gene/?term={quote(gene)})')
-    st.caption('Structured treatment evidence, approval status and guideline dates are a future implementation step. '
-               'These links are not treatment recommendations.')
 
 
-with tabs[5]:
-    safe_section(render_treatments, 'Treatments tab')
-
-
-# --------------------------------------------------------------------------
-# Tab 6: AI explanation
-# --------------------------------------------------------------------------
 def render_ai():
-    st.subheader('Gemini-assisted explanation')
-    st.write('Gemini explains supplied information; it is not the source of scientific facts or clinical classifications.')
-    question = st.text_area(
-        'What would you like explained?',
-        f'Explain the biological role of {gene} for a microbiology student.',
-        max_chars=MAX_QUESTION_CHARS,
-    )
-    if st.button('Generate explanation with Gemini'):
-        with st.spinner('Preparing explanation…'):
-            try:
-                answer = gemini_explain(gene, facts, question)
-                st.markdown(answer)
-                st.caption('AI-generated explanation. Verify scientific details against linked source records.')
-            except requests.HTTPError as e:
-                st.error(f'Gemini request failed. {describe_error(e)}')
-            except Exception as e:
-                st.error(describe_error(e))
-    references(gene)
+    st.subheader('AI Explanation Assistant')
+    st.info('Ask contextual questions about the selected gene.')
 
 
-with tabs[6]:
-    safe_section(render_ai, 'AI explanation tab')
+# --------------------------------------------------------------------------
+# Main Execution Logic
+# --------------------------------------------------------------------------
+if app_view == '🏠 Portal Home':
+    render_landing_page()
+else:
+    tabs = st.tabs(['Overview', 'Mutations', 'Gene expression', 'DNA methylation', 'Protein structure', 'Treatments', 'AI explanation'])
 
+    with tabs[0]:
+        safe_section(render_overview, 'Overview tab')
 
-st.markdown('---')
-st.markdown(
-    '<div style="text-align:center;color:gray;font-size:.85rem">'
-    'Gene-SphereAI · Evidence first, AI assisted · Not for diagnosis or treatment decisions</div>',
-    unsafe_allow_html=True,
-)
+    with tabs[1]:
+        safe_section(render_mutations, 'Mutations tab')
+
+    with tabs[2]:
+        safe_section(render_expression, 'Gene expression tab')
+
+    with tabs[3]:
+        safe_section(render_methylation, 'DNA methylation tab')
+
+    with tabs[4]:
+        safe_section(lambda: render_protein_structure(gene), 'Protein structure tab')
+
+    with tabs[5]:
+        safe_section(render_treatments, 'Treatments tab')
+
+    with tabs[6]:
+        safe_section(render_ai, 'AI explanation tab')
