@@ -681,7 +681,7 @@ def render_treatments():
                'These links are not treatment recommendations.')
 
 
-with tabs[4]:
+with tabs[5]:
     safe_section(render_treatments, 'Treatments tab')
 
 
@@ -709,7 +709,7 @@ def render_ai():
     references(gene)
 
 
-with tabs[5]:
+with tabs[6]:
     safe_section(render_ai, 'AI explanation tab')
 
 
